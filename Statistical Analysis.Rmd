@@ -1,0 +1,398 @@
+---
+title: "FE541 Group 9"
+author: "YuejieJin&YuqiLiu&Yue Zhao"
+date: "2017Äê12ÔÂ13ÈÕ"
+output: word_document
+---
+
+##
+* ## Data preparation
+```{r}
+library(quantmod)
+library(ggplot2)
+library(mgcv)
+```
+
+```{r Data}
+## ---------------------------------------------------------------------------------------------------------------
+## ----------------------------------------Response Variables-----------------------------------------------------
+## Solar Industry ------------------------------------------------------------------------------------------------
+# First Solar, Inc. (FSLR) 
+FSLR = as.data.frame(getSymbols(Symbols = "FSLR", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+# China Sunergy Co., Ltd. (CSUNY)
+CSUNY = as.data.frame(getSymbols(Symbols = "CSUNY", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+# Guggenheim Solar ETF (TAN)
+TAN = as.data.frame(getSymbols(Symbols = "TAN", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+
+## ---------------------------------------------------------------------------------------------------------------
+## ----------------------------------------Explanatory Variables--------------------------------------------------
+## Downstream Industry -------------------------------------------------------------------------------------------
+#SunPower Corporation (SPWR)
+SPWR = as.data.frame(getSymbols(Symbols = "SPWR", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+#SunEdison, Inc. (SUNEQ)
+SUNEQ = as.data.frame(getSymbols(Symbols = "SUNEQ", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+#Public Service Enterprise Group Incorporated (PEG)
+PEG = as.data.frame(getSymbols(Symbols = "PEG", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+
+## Upstream Industry -------------------------------------------------------------------------------------------
+#Silicon Laboratories Inc. (SLAB)
+SLAB = as.data.frame(getSymbols(Symbols = "SLAB", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+
+## Related Industry -------------------------------------------------------------------------------------------
+#oil: Chevron Corporation (CVX)
+CVX = as.data.frame(getSymbols(Symbols = "CVX", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+#Energy Select Sector SPDR ETF (XLE)
+XLE = as.data.frame(getSymbols(Symbols = "XLE", from = "2012-11-09", to = "2016-11-09",auto.assign = FALSE))
+```
+
+```{r Calculate Returns}
+p_close = data.frame(row.names = rownames(FSLR), First_Solar = FSLR[,6], China_Sunergy = CSUNY[,6], Solar_ETF = TAN[,6], Sun_Power = SPWR[,6], Sun_Edison = SUNEQ[,6], PSE_G = PEG[,6], Silicon=SLAB[,6], Chevron = CVX[,6], Energy_ETF = XLE[,6])
+
+returns <- data.frame(cbind.data.frame(diff(as.matrix(p_close))/(p_close)[-1,]))
+summary(returns)
+```
+##
+* ## Correlation Analysis
+```{r correlation matrix between the explanatory variables}
+plot(returns)
+
+# Explanatory
+dfvariable= returns[,c(-1,-2,-3)]
+plot(dfvariable, gap=0)
+
+VIF = diag(solve(cor(dfvariable)))  ## Variance Inflation Factors
+VIF
+round(cor(dfvariable),2)
+
+# Response
+returnsesponse= returns[,c(-4,-5,-6,-7,-8,-9)]
+plot(returnsesponse, gap=0)
+
+VIF = diag(solve(cor(returnsesponse)))  ## Variance Inflation Factors
+VIF
+round(cor(returnsesponse),2)
+```
+It seems that Chevron and Energy_ETF have high variance inflation factors, indicating that they perhaps should be dropped. The correlation matrix suggest that there's a strong relationship between Chevron and Energy_ETF (r = 0.87). This is because Chevron Corporation (CVX) is one of the largest underlying components of Energy Select Sector SPDR ETF (XLE).
+
+It seems that First Solar and Solar ETF have not small variance inflation factors, indicating that they perhaps should be dropped. The correlation matrix suggest that there's a relationship between First Solar and Solar ETF (r = 0.67). This is because the First Solar is one of the underlying components of Solar ETF, but China Sunergy is a company from China.
+
+##
+* ## Simple Linear Regression
+```{r Simple Linear Regression and Compare R-squared - First Solar}
+# Find the best fit
+r_square_fs <- c()
+for (i in 4:9)
+{
+  temp <- summary(lm(First_Solar~returns[,i], data=returns))
+  r_square_fs <- c(r_square_fs,temp$adj.r.squared)
+}
+r_square_fs <- as.matrix(r_square_fs)
+rownames(r_square_fs) <- c("Sun_Power","Sun_Edison","PSE_G","Silicon","Chevron","Energy_ETF")
+r_square_fs
+
+# Linear
+fs_model1 <- lm(First_Solar~Sun_Power, data=returns)
+summary(fs_model1)
+par(mfrow=c(1,2))
+plot(fs_model1, which=c(1,2))
+# Polynomial
+fs_model2 <- lm(First_Solar~poly(Sun_Power, 3), data=returns)
+summary(fs_model2)
+par(mfrow=c(1,2))
+plot(fs_model2, which=c(1,2))
+anova(fs_model1,fs_model2, test = "Chisq")
+# GAM
+fs_model3 <- gam(First_Solar~s(Sun_Power), data=returns)
+summary(fs_model3)
+plot(fs_model3)
+anova(fs_model1,fs_model3, test = "Chisq")
+
+# R-squared
+r_square_fs <- matrix(c(summary(fs_model1)$adj.r.squared,summary(fs_model2)$adj.r.squared,summary(fs_model3)$r.sq))
+rownames(r_square_fs) <- c("Linear","Poly","GAM")
+r_square_fs
+```
+
+```{r Simple Linear Regression and Compare R-squared - China Sunergy}
+# Find the best fit
+r_square_cs <- c()
+for (i in 4:9)
+{
+  temp <- summary(lm(China_Sunergy~returns[,i], data=returns))
+  r_square_cs <- c(r_square_cs,temp$adj.r.squared)
+}
+r_square_cs <- as.matrix(r_square_cs)
+rownames(r_square_cs) <- c("Sun_Power","Sun_Edison","PSE_G","Silicon","Chevron","Energy_ETF")
+r_square_cs
+
+# Linear
+cs_model1 <- lm(China_Sunergy~Sun_Edison, data=returns)
+summary(cs_model1)
+par(mfrow=c(1,2))
+plot(cs_model1, which=c(1,2))
+# Polynomial
+cs_model2 <- lm(China_Sunergy~poly(Sun_Edison,7), data=returns)
+summary(cs_model2)
+par(mfrow=c(1,2))
+plot(cs_model2, which=c(1,2))
+anova(cs_model1,cs_model2, test = "Chisq")
+# GAM
+cs_model3 <- gam(China_Sunergy~s(Sun_Edison), data=returns)
+summary(cs_model3)
+plot(cs_model3)
+anova(cs_model1,cs_model3, test = "Chisq")
+
+# R-squared
+r_square_cs <- matrix(c(summary(cs_model1)$adj.r.squared,summary(cs_model2)$adj.r.squared,summary(cs_model3)$r.sq))
+rownames(r_square_cs) <- c("Linear","Poly","GAM")
+r_square_cs
+```
+
+```{r Simple Linear Regression and Compare R-squared - Guggenheim Solar ETF }
+# Find the best fit
+r_square_se <- c()
+index <- c(1,2,4,5,6,7,8,9)
+for (i in index)
+{
+  temp <- summary(lm(Solar_ETF~returns[,i], data=returns))
+  r_square_se <- c(r_square_se,temp$adj.r.squared)
+}
+r_square_se <- as.matrix(r_square_se)
+rownames(r_square_se) <- c("First_Solar","China_Sunergy","Sun_Power","Sun_Edison","PSE_G","Silicon","Chevron","Energy_ETF")
+r_square_se
+
+# Linear
+se_model1 <- lm(Solar_ETF~Sun_Power, data=returns)
+summary(se_model1)
+par(mfrow=c(1,2))
+plot(se_model1, which=c(1,2))
+# Polynomial
+se_model2 <- lm(Solar_ETF~poly(Sun_Power,6), data=returns)
+summary(se_model2)
+par(mfrow=c(1,2))
+plot(se_model2, which=c(1,2))
+anova(se_model1,se_model2, test = "Chisq")
+# GAM
+se_model3 <- gam(Solar_ETF~s(Sun_Power), data=returns)
+summary(se_model3)
+plot(se_model3)
+anova(se_model1,se_model3, test = "Chisq")
+
+# R-squared
+r_square_se <- matrix(c(summary(se_model1)$adj.r.squared,summary(se_model2)$adj.r.squared,summary(se_model3)$r.sq))
+rownames(r_square_se) <- c("Linear","Poly","GAM")
+r_square_se
+```
+
+##
+* ## Multiple regression
+```{r Multiple Regression and Compare R-squared - First Solar}
+# Stepwise Selection
+null.model <- lm(First_Solar ~ 1, data=returns)
+full.model <- lm(First_Solar~Sun_Power+Sun_Edison+PSE_G+Silicon+Chevron+Energy_ETF, data=returns)
+full.model.formula <- First_Solar~Sun_Power+Sun_Edison+PSE_G+Silicon+Chevron+Energy_ETF
+stepwise_FS_all  <- step( null.model, full.model.formula, trace=0)
+stepwise_FS_all
+
+# Linear
+FS_lr_a <- lm(formula = First_Solar ~ Sun_Power + Energy_ETF + Sun_Edison + Silicon, data = returns)
+summary(FS_lr_a)
+par(mfrow=c(1,2))
+plot(FS_lr_a, which=c(1,2))
+# Polynomial
+FS_ply_a <- lm(formula = First_Solar ~ poly(Sun_Power,4) + poly(Energy_ETF,1) + poly(Sun_Edison,1) + poly(Silicon,1), data = returns)
+summary(FS_ply_a)
+par(mfrow=c(1,2))
+plot(FS_ply_a, which=c(1,2))
+anova(FS_lr_a,FS_ply_a, test = "Chisq")
+# GAM
+FS_gam_a <- gam(formula = First_Solar ~ s(Sun_Power) + s(Energy_ETF) + s(Sun_Edison) + s(Silicon), data = returns)
+summary(FS_gam_a)
+par(mfrow=c(1,2))
+plot(FS_gam_a)
+anova(FS_lr_a,FS_gam_a, test = "Chisq")
+
+# R-squared
+r_square_fs2 <- matrix(c(summary(FS_lr_a)$adj.r.squared,summary(FS_ply_a)$adj.r.squared,summary(FS_gam_a)$r.sq))
+rownames(r_square_fs2) <- c("Linear","Poly","GAM")
+r_square_fs2
+```
+
+```{r Multiple Regression and Compare R-squared - China Sunergy}
+# Stepwise Selection
+null.model <- lm(China_Sunergy ~ 1, data=returns)
+full.model <- lm(China_Sunergy~Sun_Power+Sun_Edison+PSE_G+Silicon+Chevron+Energy_ETF, data=returns)
+full.model.formula <- China_Sunergy~Sun_Power+Sun_Edison+PSE_G+Silicon+Chevron+Energy_ETF
+stepwise_CS_all  <- step( null.model, full.model.formula, trace=0)
+stepwise_CS_all
+
+# Linear
+CS_lr_a <- lm(formula = China_Sunergy ~ Sun_Edison + Sun_Power + Silicon, data = returns)
+summary(CS_lr_a)
+par(mfrow=c(1,2))
+plot(CS_lr_a, which=c(1,2))
+# Polynomial
+CS_ply_a <- lm(formula = China_Sunergy ~ poly(Sun_Edison,8) + poly(Sun_Power,1) + poly(Silicon,5), data = returns)
+summary(CS_ply_a)
+par(mfrow=c(1,2))
+plot(CS_ply_a, which=c(1,2))
+anova(CS_lr_a,CS_ply_a, test = "Chisq")
+# GAM
+CS_gam_a <- gam(formula = China_Sunergy ~ s(Sun_Edison) + s(Sun_Power) + s(Silicon), data = returns)
+summary(CS_gam_a)
+par(mfrow=c(1,2))
+plot(CS_gam_a)
+anova(CS_lr_a,CS_gam_a, test = "Chisq")
+
+# R-squared
+r_square_cs2 <- matrix(c(summary(CS_lr_a)$adj.r.squared,summary(CS_ply_a)$adj.r.squared,summary(CS_gam_a)$r.sq))
+rownames(r_square_cs2) <- c("Linear","Poly","GAM")
+r_square_cs2
+```
+
+```{r Multiple Regression and Compare R-squared - Guggenheim Solar ETF}
+# Stepwise Selection
+null.model <- lm(Solar_ETF ~ 1, data=returns)
+full.model <- lm(Solar_ETF~First_Solar+China_Sunergy+Sun_Power+Sun_Edison+PSE_G+Silicon+Chevron+Energy_ETF, data=returns)
+full.model.formula <- Solar_ETF~First_Solar+China_Sunergy+Sun_Power+Sun_Edison+PSE_G+Silicon+Chevron+Energy_ETF
+stepwise_SE_all  <- step( null.model, full.model.formula, trace=0)
+stepwise_SE_all
+
+# Linear
+SE_lr_a <- lm(formula = Solar_ETF ~ Sun_Power + First_Solar + Energy_ETF + Sun_Edison + Silicon + China_Sunergy, data = returns)
+summary(SE_lr_a)
+par(mfrow=c(1,2))
+plot(SE_lr_a, which=c(1,2))
+# Polynomial
+SE_ply_a <- lm(formula = Solar_ETF ~ poly(Sun_Power,7) + poly(First_Solar,11) + poly(Energy_ETF,4) + poly(Sun_Edison,4) + poly(Silicon,3) + poly(China_Sunergy,4), data = returns)
+summary(SE_ply_a)
+par(mfrow=c(1,2))
+plot(SE_ply_a, which=c(1,2))
+anova(SE_lr_a,SE_ply_a, test = "Chisq")
+# GAM
+SE_gam_a <- gam(formula = Solar_ETF ~ s(Sun_Power) + s(First_Solar) + s(Energy_ETF) + s(Sun_Edison) + s(Silicon) + s(China_Sunergy), data = returns)
+summary(SE_gam_a)
+par(mfrow=c(1,2))
+plot(SE_gam_a)
+anova(SE_lr_a,SE_gam_a, test = "Chisq")
+
+# R-squared
+r_square_SE2 <- matrix(c(summary(SE_lr_a)$adj.r.squared,summary(SE_ply_a)$adj.r.squared,summary(SE_gam_a)$r.sq))
+rownames(r_square_SE2) <- c("Linear","Poly","GAM")
+r_square_SE2
+```
+
+##
+* ## Logistic regression
+```{r logistic regression}
+attach(returns)
+FSLR_level = c()
+for (i in 1:length(First_Solar)){
+  if (First_Solar[i] > 0) {
+    FSLR_level = c(FSLR_level, 1)}
+  else{FSLR_level = c(FSLR_level, 0)}}
+FSLR_level = factor(FSLR_level)
+L_model1 <- glm(FSLR_level ~ Sun_Power + Sun_Edison + PSE_G + Silicon + Chevron + Energy_ETF, family = binomial(link = "logit"))
+L_model1 <- step(L_model1, direction = "backward",trace = 0)
+
+CSUNY_level = c()
+for (i in 1:length(China_Sunergy)){
+  if (China_Sunergy[i] >= 0) {
+    CSUNY_level = c(CSUNY_level, 1)}
+  else{CSUNY_level = c(CSUNY_level, 0)}}
+CSUNY_level = factor(CSUNY_level)
+L_model2 <- glm(CSUNY_level ~ Sun_Power + Sun_Edison + PSE_G + Silicon + Chevron + Energy_ETF, family = binomial(link = "logit"))
+L_model2 <- step(L_model2, direction = "backward",trace = 0)
+
+
+TAN_level = c()
+for (i in 1:length(Solar_ETF)){
+  if (Solar_ETF[i] > 0) {
+    TAN_level = c(TAN_level, 1)}
+  else{TAN_level = c(TAN_level, 0)}}
+TAN_level = factor(TAN_level)
+L_model3 <- glm(TAN_level ~ First_Solar+ Sun_Power + Sun_Edison + PSE_G + Silicon + Chevron + Energy_ETF, family = binomial(link = "logit"))
+L_model3 <- step(L_model3, direction = "backward",trace = 0)
+
+detach(returns)
+```
+
+##
+* ## Test the models
+```{r Data}
+## ---------------------------------------------------------------------------------------------------------------
+## ----------------------------------------Response Variables-----------------------------------------------------
+## Solar Industry ------------------------------------------------------------------------------------------------
+# First Solar, Inc. (FSLR) 
+FSLR2 = as.data.frame(getSymbols(Symbols = "FSLR", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+# China Sunergy Co., Ltd. (CSUNY)
+CSUNY2 = as.data.frame(getSymbols(Symbols = "CSUNY", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+# Guggenheim Solar ETF (TAN)
+TAN2 = as.data.frame(getSymbols(Symbols = "TAN", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+
+## ---------------------------------------------------------------------------------------------------------------
+## ----------------------------------------Explanatory Variables--------------------------------------------------
+## Downstream Industry -------------------------------------------------------------------------------------------
+#SunPower Corporation (SPWR)
+SPWR2 = as.data.frame(getSymbols(Symbols = "SPWR", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+#SunEdison, Inc. (SUNEQ)
+SUNEQ2 = as.data.frame(getSymbols(Symbols = "SUNEQ", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+#Public Service Enterprise Group Incorporated (PEG)
+PEG2 = as.data.frame(getSymbols(Symbols = "PEG", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+
+## Upstream Industry -------------------------------------------------------------------------------------------
+#Silicon Laboratories Inc. (SLAB)
+SLAB2 = as.data.frame(getSymbols(Symbols = "SLAB", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+
+## Related Industry -------------------------------------------------------------------------------------------
+#oil: Chevron Corporation (CVX)
+CVX2 = as.data.frame(getSymbols(Symbols = "CVX", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+#Energy Select Sector SPDR ETF (XLE)
+XLE2 = as.data.frame(getSymbols(Symbols = "XLE", from = "2016-11-09", to = "2017-11-09",auto.assign = FALSE))
+```
+
+```{r Calculate Returns}
+p_close2 = data.frame(row.names = rownames(FSLR2), First_Solar = FSLR2[,6], China_Sunergy = CSUNY2[,6], Solar_ETF = TAN2[,6], Sun_Power = SPWR2[,6], Sun_Edison = SUNEQ2[,6], PSE_G = PEG2[,6], Silicon=SLAB2[,6], Chevron = CVX2[,6], Energy_ETF = XLE2[,6])
+
+returns2 <- data.frame(cbind.data.frame(diff(as.matrix(p_close2))/(p_close2)[-1,]))
+summary(returns2)
+```
+
+```{r testing models - SSE}
+sum((predict(fs_model3, returns2) - returns2$First_Solar)^2)/length(returns2$First_Solar)
+sum((predict(cs_model3, returns2) - returns2$China_Sunergy)^2)/length(returns2$China_Sunergy)
+sum((predict(se_model2, returns2) - returns2$Solar_ETF)^2)/length(returns2$Solar_ETF)
+sum((predict(FS_gam_a, returns2) - returns2$First_Solar)^2)/length(returns2$First_Solar)
+sum((predict(CS_gam_a, returns2) - returns2$China_Sunergy)^2)/length(returns2$China_Sunergy)
+sum((predict(SE_gam_a, returns2) - returns2$Solar_ETF)^2)/length(returns2$Solar_ETF)
+```
+
+```{r testing models - accuracy}
+attach(returns2)
+FSLR_level_t = c()
+for (i in 1:length(First_Solar)){
+  if (First_Solar[i] > 0) {
+    FSLR_level_t = c(FSLR_level_t, 1)}
+  else{FSLR_level_t = c(FSLR_level_t, 0)}}
+FSLR_level_t = factor(FSLR_level_t)
+
+CSUNY_level_t = c()
+for (i in 1:length(China_Sunergy)){
+  if (China_Sunergy[i] > 0) {
+    CSUNY_level_t = c(CSUNY_level_t, 1)}
+  else{CSUNY_level_t = c(CSUNY_level_t, 0)}}
+CSUNY_level_t = factor(CSUNY_level_t)
+
+TAN_level_t = c()
+for (i in 1:length(Solar_ETF)){
+  if (Solar_ETF[i] > 0) {
+    TAN_level_t = c(TAN_level_t, 1)}
+  else{TAN_level_t = c(TAN_level_t, 0)}}
+TAN_level_t = factor(TAN_level_t)
+
+sum(round(predict(L_model1,newdata = returns2,type = "response"))==FSLR_level_t)/length(First_Solar)
+sum(round(predict(L_model2,newdata = returns2,type = "response"))==CSUNY_level_t)/length(China_Sunergy)
+sum(round(predict(L_model3,newdata = returns2,type = "response"))==TAN_level_t)/length(Solar_ETF)
+
+detach(returns2)
+```
