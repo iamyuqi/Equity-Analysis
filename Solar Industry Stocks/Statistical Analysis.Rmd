@@ -1,7 +1,7 @@
 ---
-title: "FE541 Group 9"
+title: "Solar Energy Industry Stocks Statistical Analysis"
 author: "YuejieJin&YuqiLiu&Yue Zhao"
-date: "2017Äê12ÔÂ13ÈÕ"
+date: "2017-12-13"
 output: word_document
 ---
 
